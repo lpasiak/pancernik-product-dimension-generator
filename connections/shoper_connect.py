@@ -105,7 +105,16 @@ class ShoperAPIClient:
             return None
 
     def get_all_active_products_formatted(self):
-        products = self.get_all_products()
+        products = pd.read_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_products.xlsx'))
+        products = products.replace({pd.NA: None})  # Replace NA values with None
+        
+        # Convert string representations of lists/dicts back to Python objects
+        for column in products.columns:
+            try:
+                products[column] = products[column].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) and (x.startswith('{') or x.startswith('[')) else x)
+            except (ValueError, SyntaxError):
+                continue
+            
         print(products)
 
         formatted_products = []
@@ -146,6 +155,7 @@ class ShoperAPIClient:
         # Remove all HTML tags and get clean text
         soup = BeautifulSoup(product_description, 'html.parser')
         description_clean = soup.get_text()
+        description_clean = description_clean.replace('\n', ' ')
         description_clean = ' '.join(description_clean.split())
         description = description_clean
 
@@ -157,8 +167,7 @@ class ShoperAPIClient:
             # If we find comma-separated dimensions, format them
             product_dimensions = f"{comma_match.group(1)} x {comma_match.group(2)} x {comma_match.group(3)}"
         else:
-            # Try to find three dimensions pattern with x or dash
-            three_dim_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+            three_dim_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
             three_dim_match = re.search(three_dim_pattern, description)
             
             if three_dim_match:
@@ -166,7 +175,7 @@ class ShoperAPIClient:
                 product_dimensions = f"{three_dim_match.group(1)} x {three_dim_match.group(2)} x {three_dim_match.group(3)}"
             else:
                 # Try to find two dimensions pattern
-                dimension_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+                dimension_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
                 dimensions_match = re.search(dimension_pattern, description)
                 if dimensions_match:
                     product_dimensions = f"{dimensions_match.group(1)} x {dimensions_match.group(2)}"

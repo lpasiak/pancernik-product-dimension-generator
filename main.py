@@ -6,8 +6,9 @@ import pandas as pd
 def get_user_action():
     return str(input(f'''
 Co chcesz zrobić?
-1. Pobrać wymiary produktów
-2. Pobrać Allegro do uzupełnienia
+1. Pobrać produkty
+2. Eksportować wymiary produktów
+3. Pobrać Allegro do uzupełnienia
 q żeby wyjść.
 Akcja: '''))
 
@@ -26,16 +27,16 @@ def main():
         sheet_name=config.SHEET_NAME
     )
 
-    shoper_client.connect()
-    gsheets_client.connect()
-
     while True:
         action = get_user_action()
-        
         if action == '1':
+            shoper_client.connect()
+            shoper_client.get_all_products()
+        if action == '2':
             all_products = shoper_client.get_all_active_products_formatted()
+            gsheets_client.connect()
             gsheets_client.save_data(all_products)
-        elif action == '2':
+        elif action == '3':
             pass
         elif action == 'q':
             print('Do zobaczenia!')
