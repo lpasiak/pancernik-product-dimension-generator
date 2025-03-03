@@ -2,6 +2,8 @@ import pandas as pd
 import requests, time, os, json
 import config
 import re
+import ast
+from bs4 import BeautifulSoup
 
 class ShoperAPIClient:
 
@@ -60,7 +62,7 @@ class ShoperAPIClient:
                 break
 
             # FOR TESTING
-            # if page == 3:
+            # if page == 11:
             #     break
 
             print(f'Page: {page}/{number_of_pages}')
@@ -70,70 +72,14 @@ class ShoperAPIClient:
         df = pd.DataFrame(products)
         df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_products.xlsx'), index=False)
         return df
-    
-    def get_all_attribute_groups(self):
-        attribute_groups = []
-        page = 1
-        url = f'{self.site_url}/webapi/rest/attribute-groups'
 
-        print("Downloading all attribute groups.")
-        while True:
-            params = {'limit': config.SHOPER_LIMIT, 'page': page}
-            response = self._handle_request('GET', url, params=params)
-            data = response.json()
-            number_of_pages = data['pages']
-
-            if response.status_code != 200:
-                raise Exception(f"Failed to fetch data: {response.status_code}, {response.text}")
-
-            page_data = response.json().get('list', [])
-
-            if not page_data:  # If no data is returned
-                break
-
-            print(f'Page: {page}/{number_of_pages}')
-            attribute_groups.extend(page_data)
-            page += 1
-
-        df = pd.DataFrame(attribute_groups)
-        df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_attribute_groups.xlsx'), index=False)
-        return attribute_groups
-
-    def get_all_attributes(self):
-            attributes = []
-            page = 1
-            url = f'{self.site_url}/webapi/rest/attributes'
-
-            print("Downloading all attributes.")
-            while True:
-                params = {'limit': config.SHOPER_LIMIT, 'page': page}
-                response = self._handle_request('GET', url, params=params)
-                data = response.json()
-                number_of_pages = data['pages']
-
-                if response.status_code != 200:
-                    raise Exception(f"Failed to fetch data: {response.status_code}, {response.text}")
-
-                page_data = response.json().get('list', [])
-
-                if not page_data:  # If no data is returned
-                    break
-
-                print(f'Page: {page}/{number_of_pages}')
-                attributes.extend(page_data)
-                page += 1
-
-            df = pd.DataFrame(attributes)
-            df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_attributes.xlsx'), index=False)
-            return df
-    
     def get_a_single_product(self, product_id):
         url = f'{self.site_url}/webapi/rest/products/{product_id}'
 
         response = self._handle_request('GET', url)
         product = response.json()
 
-        return product
+        return pd.DataFrame(product)
     
     def get_a_single_product_by_code(self, product_code):
         url = f'{self.site_url}/webapi/rest/products'
@@ -158,32 +104,115 @@ class ShoperAPIClient:
             print(f'Error fetching product {product_code}: {str(e)}')
             return None
 
-    def get_all_active_products(self):
-        products = self.get_all_products()
-        products = products[products['stock']['active'] == 1]
-
-        return products
-
     def get_all_active_products_formatted(self):
-        # TO be replaced with a get_all_active_products() call
-        products = self.get_a_single_product_by_code('4711064647082')
+        products = self.get_all_products()
+        print(products)
 
-        attribute_groups = self.get_all_attribute_groups()
-        attributes = self.get_all_attributes()
-
-        formatted_product = {
-            'EAN': products['code'],
-            'Nazwa': products['translations']['pl_PL']['name'],
-            'ID produktu': products['product_id'],
-            'Link do edycji': f'{self.site_url}/admin/products/edit/id/{products["product_id"]}',
-            'Typ produktu': products['attributes']['550']['1370'],
-            'Opis': products['translations']['pl_PL']['description'],
-            'Atrybuty': products['attributes']
-        }
-
-        # Convert single product dictionary to DataFrame
-        products_df = pd.DataFrame([formatted_product])
-
-        products_df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_active_products.xlsx'), index=False)
+        formatted_products = []
         
-        return products_df
+        for _, product in products.iterrows():
+
+            attributes = product['attributes']
+            
+            type_product = ''
+            if isinstance(attributes, dict):
+                if isinstance(attributes.get('550'), dict):
+                    type_product = attributes['550'].get('1370', '')
+
+            description_dimensions, description = self.find_dimensions_description(product['translations']['pl_PL']['description'])
+
+            formatted_product = {
+                'EAN': product['code'],
+                'Nazwa': product['translations']['pl_PL']['name'],
+                'ID produktu': product['product_id'],
+                'Link do edycji': f'{self.site_url}/admin/products/edit/id/{product["product_id"]}',
+                'Typ produktu': type_product,
+                'Wymiary atrybut': self.find_dimensions_attribute(attributes),
+                'Wymiary opis': description_dimensions,
+                'Ilość': product['stock']['stock'],
+                'Opis bez HTML': description
+            }
+            if formatted_product['Ilość'] != '0':
+                if ('Etui' in formatted_product['Typ produktu'] or 'Szkło' in formatted_product['Typ produktu'] or 'Pasek' in formatted_product['Typ produktu']):
+                    if 'słuchawek' not in formatted_product['Typ produktu'] and 'laptopa' not in formatted_product['Typ produktu']:
+                        formatted_products.append(formatted_product)
+
+        formatted_product_df = pd.DataFrame(formatted_products)
+        formatted_product_df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_active_products.xlsx'), index=False)
+        
+        return formatted_product_df
+    
+    def find_dimensions_description(self, product_description):
+        # Remove all HTML tags and get clean text
+        soup = BeautifulSoup(product_description, 'html.parser')
+        description_clean = soup.get_text()
+        description_clean = ' '.join(description_clean.split())
+        description = description_clean
+
+        # Try to find comma-separated dimensions first
+        comma_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?[\s,]+(\d+[.,]\d+|\d+)\s*(?:cm|mm)?[\s,]+(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+        comma_match = re.search(comma_pattern, description)
+        
+        if comma_match:
+            # If we find comma-separated dimensions, format them
+            product_dimensions = f"{comma_match.group(1)} x {comma_match.group(2)} x {comma_match.group(3)}"
+        else:
+            # Try to find three dimensions pattern with x or dash
+            three_dim_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+            three_dim_match = re.search(three_dim_pattern, description)
+            
+            if three_dim_match:
+                # If we find three dimensions, use all of them
+                product_dimensions = f"{three_dim_match.group(1)} x {three_dim_match.group(2)} x {three_dim_match.group(3)}"
+            else:
+                # Try to find two dimensions pattern
+                dimension_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+                dimensions_match = re.search(dimension_pattern, description)
+                if dimensions_match:
+                    product_dimensions = f"{dimensions_match.group(1)} x {dimensions_match.group(2)}"
+                else:
+                    product_dimensions = ''
+
+        return [product_dimensions, description]
+
+    def find_dimensions_attribute(self, attributes):
+        # Safety check
+        if not isinstance(attributes, dict):
+            return ''
+        
+        product_length = ''
+        product_height = ''
+
+        # Check if the attribute group exists and is a dictionary
+        if '552' in attributes and isinstance(attributes['552'], dict) and attributes['552'].get('1191'):
+            product_length = attributes['552']['1191']
+        elif '555' in attributes and isinstance(attributes['555'], dict) and attributes['555'].get('1207'):
+            product_length = attributes['555']['1207']
+        elif '560' in attributes and isinstance(attributes['560'], dict) and attributes['560'].get('1249'):
+            product_length = attributes['560']['1249']
+        elif '553' in attributes and isinstance(attributes['553'], dict) and attributes['553'].get('1192'):
+            product_length = attributes['553']['1192']
+        elif '556' in attributes and isinstance(attributes['556'], dict) and attributes['556'].get('1217'):
+            product_length = attributes['556']['1217']
+        elif '562' in attributes and isinstance(attributes['562'], dict) and attributes['562'].get('1268'):
+            product_length = attributes['562']['1268']
+
+        if '552' in attributes and isinstance(attributes['552'], dict) and attributes['552'].get('1196'):
+            product_height = attributes['552']['1196']
+        elif '553' in attributes and isinstance(attributes['553'], dict) and attributes['553'].get('1193'):
+            product_height = attributes['553']['1193']
+        elif '555' in attributes and isinstance(attributes['555'], dict) and attributes['555'].get('1208'):
+            product_height = attributes['555']['1208']
+        elif '556' in attributes and isinstance(attributes['556'], dict) and attributes['556'].get('1218'):
+            product_height = attributes['556']['1218']
+        elif '560' in attributes and isinstance(attributes['560'], dict) and attributes['560'].get('1250'):
+            product_height = attributes['560']['1250']
+        elif '561' in attributes and isinstance(attributes['561'], dict) and attributes['561'].get('1270'):
+            product_height = attributes['561']['1270']
+        elif '562' in attributes and isinstance(attributes['562'], dict) and attributes['562'].get('1269'):
+            product_height = attributes['562']['1269']
+
+        if product_length != '' and product_height != '':
+            return f"{product_length} x {product_height}"
+        else:
+            return ''

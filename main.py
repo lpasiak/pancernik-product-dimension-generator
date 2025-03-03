@@ -3,6 +3,15 @@ from connections import ShoperAPIClient, GSheetsClient
 import os
 import pandas as pd
 
+def get_user_action():
+    return str(input(f'''
+Co chcesz zrobić?
+1. Pobrać wymiary produktów
+2. Pobrać Allegro do uzupełnienia
+q żeby wyjść.
+Akcja: '''))
+
+
 def main():
 
     shoper_client = ShoperAPIClient(
@@ -20,25 +29,19 @@ def main():
     shoper_client.connect()
     gsheets_client.connect()
 
-    x = shoper_client.get_all_active_products_formatted()
-    print(x)
-
-#     while True:
-
-# #         x = str(input('''Co chcesz zrobić?
-# # 1 - Pobrać produkty
-# # 2 - Wgrać wymiary
-# # q - Wyjść z programu
-# # akcja: '''))
-
-# #         if x == '1':
-# #             pass
-# #         elif x == '2':
-# #             pass
-
-# #         elif x == 'q':
-# #             break
-
+    while True:
+        action = get_user_action()
+        
+        if action == '1':
+            all_products = shoper_client.get_all_active_products_formatted()
+            gsheets_client.save_data(all_products)
+        elif action == '2':
+            pass
+        elif action == 'q':
+            print('Do zobaczenia!')
+            break
+        else:
+            print('Nie ma takiego wyboru :/')
 
 if __name__ == "__main__":
     main()
