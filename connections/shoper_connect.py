@@ -71,8 +71,131 @@ class ShoperAPIClient:
 
         df = pd.DataFrame(products)
         df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_products.xlsx'), index=False)
+
+        print('Products loaded succesfully.')
         return df
 
+    def get_all_categories(self):
+        categories = []
+        page = 1
+        url = f'{self.site_url}/webapi/rest/categories'
+
+        print("Downloading all categories.")   
+        while True:
+            params = {'limit': config.SHOPER_LIMIT, 'page': page}
+            response = self._handle_request('GET', url, params=params)
+            data = response.json()
+            number_of_pages = data['pages']
+
+            if response.status_code != 200:
+                raise Exception(f"Failed to fetch data: {response.status_code}, {response.text}")
+
+            page_data = response.json().get('list', [])
+
+            if not page_data:
+                break
+        
+            print(f'Page: {page}/{number_of_pages}')
+            categories.extend(page_data)
+            page += 1
+        
+        df = pd.DataFrame(categories)
+        df.to_excel(os.path.join(self.sheets_dir, 'shoper_all_categories.xlsx'), index=False)
+
+        print('Categories loaded succesfully.')
+        return df
+    
+    def get_all_producers(self):
+        producers = []
+        page = 1
+        url = f'{self.site_url}/webapi/rest/producers'
+
+        print("Downloading all producers.")
+
+        while True:
+            params = {'limit': config.SHOPER_LIMIT, 'page': page}
+            response = self._handle_request('GET', url, params=params)
+            data = response.json()
+            number_of_pages = data['pages']
+
+            if response.status_code != 200:
+                raise Exception(f"Failed to fetch data: {response.status_code}, {response.text}")
+
+            page_data = response.json().get('list', [])
+
+            if not page_data:
+                break
+        
+            print(f'Page: {page}/{number_of_pages}')
+            producers.extend(page_data)
+            page += 1
+
+        df = pd.DataFrame(producers)
+        df.to_excel(os.path.join(self.sheets_dir, 'shoper_all_producers.xlsx'), index=False)
+
+        print('Producers loaded succesfully.')
+        return df
+
+    def get_all_attribute_groups(self):
+        attribute_groups = []
+        page = 1
+        url = f'{self.site_url}/webapi/rest/attribute-groups'
+
+        print("Downloading all attribute groups.")
+        while True:
+            params = {'limit': config.SHOPER_LIMIT, 'page': page}
+            response = self._handle_request('GET', url, params=params)
+            data = response.json()
+            number_of_pages = data['pages']
+
+            if response.status_code != 200:
+                raise Exception(f"Failed to fetch data: {response.status_code}, {response.text}")
+
+            page_data = response.json().get('list', [])
+
+            if not page_data:  # If no data is returned
+                break
+
+            print(f'Page: {page}/{number_of_pages}')
+            attribute_groups.extend(page_data)
+            page += 1
+
+        df = pd.DataFrame(attribute_groups)
+        df.to_excel(os.path.join(self.sheets_dir, 'shoper_all_attribute_groups.xlsx'), index=False)
+
+        print('Attribute groups loaded succesfully.')
+        return attribute_groups
+
+    def get_all_attributes(self):
+        attributes = []
+        page = 1
+        url = f'{self.site_url}/webapi/rest/attributes'
+
+        print("Downloading all attributes.")
+        while True:
+            params = {'limit': config.SHOPER_LIMIT, 'page': page}
+            response = self._handle_request('GET', url, params=params)
+            data = response.json()
+            number_of_pages = data['pages']
+
+            if response.status_code != 200:
+                raise Exception(f"Failed to fetch data: {response.status_code}, {response.text}")
+
+            page_data = response.json().get('list', [])
+
+            if not page_data:  # If no data is returned
+                break
+
+            print(f'Page: {page}/{number_of_pages}')
+            attributes.extend(page_data)
+            page += 1
+
+        df = pd.DataFrame(attributes)
+        df.to_excel(os.path.join(self.sheets_dir, 'shoper_all_attributes.xlsx'), index=False)
+
+        print('Attributes loaded succesfully.')
+        return df
+    
     def get_a_single_product(self, product_id):
         url = f'{self.site_url}/webapi/rest/products/{product_id}'
 
@@ -104,29 +227,68 @@ class ShoperAPIClient:
             print(f'Error fetching product {product_code}: {str(e)}')
             return None
 
-    def get_all_active_products_formatted(self):
-        products = pd.read_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_products.xlsx'))
-        products = products.replace({pd.NA: None})  # Replace NA values with None
+    def get_all_data(self):
+        self.get_all_categories()
+        self.get_all_producers()
+        self.get_all_attribute_groups
+        self.get_all_attributes()
+        self.get_all_products()
         
-        # Convert string representations of lists/dicts back to Python objects
+        print('All data downloaded from Shoper')
+
+    def get_all_active_products_formatted(self):
+
+        # Load products, categories, producers from excel and change its columns to Pythonic Dictionaries/Lists
+        print('Loading products...')
+        products = pd.read_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_products.xlsx'))
+        products = products.replace({pd.NA: None})
+        
         for column in products.columns:
             try:
                 products[column] = products[column].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) and (x.startswith('{') or x.startswith('[')) else x)
             except (ValueError, SyntaxError):
                 continue
+
+        # try:
+        #     categories = pd.read_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_categories.xlsx'))
+        #     products = products.replace({pd.NA: None})
             
-        print(products)
-
-        formatted_products = []
+        #     for column in categories.columns:
+        #         try:
+        #             products[column] = products[column].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) and (x.startswith('{') or x.startswith('[')) else x)
+        #         except (ValueError, SyntaxError):
+        #             continue
+        # except FileNotFoundError:
+        #     print('File shoper_all_categories.xlsx not found')
+        #     return pd.DataFrame()  # Return empty DataFrame instead of None
         
-        for _, product in products.iterrows():
+        # try:
+        #     producers = pd.read_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_producers.xlsx'))
+        #     products = products.replace({pd.NA: None})
+            
+        #     for column in producers.columns:
+        #         try:
+        #             products[column] = products[column].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) and (x.startswith('{') or x.startswith('[')) else x)
+        #         except (ValueError, SyntaxError):
+        #             continue
+        # except FileNotFoundError:
+        #     print('File shoper_all_producers.xlsx not found')
+        #     return pd.DataFrame()  # Return empty DataFrame instead of None
+            
+        formatted_products = []
 
+        print(f'Processing {len(products)} products')
+
+        for _, product in products.iterrows():
+            
             attributes = product['attributes']
             
-            type_product = ''
+            product_type = ''
+            product_series = ''
             if isinstance(attributes, dict):
                 if isinstance(attributes.get('550'), dict):
-                    type_product = attributes['550'].get('1370', '')
+                    product_type = attributes['550'].get('1370', '')
+                    product_series = attributes['550'].get('1160', '')
 
             description_dimensions, description = self.find_dimensions_description(product['translations']['pl_PL']['description'])
 
@@ -134,21 +296,35 @@ class ShoperAPIClient:
                 'EAN': product['code'],
                 'Nazwa': product['translations']['pl_PL']['name'],
                 'ID produktu': product['product_id'],
+                'Typ produktu': product_type,
+                'Seria produktu': product_series,
                 'Link do edycji': f'{self.site_url}/admin/products/edit/id/{product["product_id"]}',
-                'Typ produktu': type_product,
                 'Wymiary atrybut': self.find_dimensions_attribute(attributes),
                 'Wymiary opis': description_dimensions,
                 'Ilość': product['stock']['stock'],
+                'Komentarz': '',
+                'Data dodania produktu': pd.to_datetime(product['add_date'].split()[0]).strftime('%d-%m-%Y'),
                 'Opis bez HTML': description
             }
+            
+            # Product filters
             if formatted_product['Ilość'] != '0':
-                if ('Etui' in formatted_product['Typ produktu'] or 'Szkło' in formatted_product['Typ produktu'] or 'Pasek' in formatted_product['Typ produktu']):
-                    if 'słuchawek' not in formatted_product['Typ produktu'] and 'laptopa' not in formatted_product['Typ produktu']:
-                        formatted_products.append(formatted_product)
+                if ('etui' in formatted_product['Typ produktu'].lower() or 
+                    'szkło' in formatted_product['Typ produktu'].lower() or 
+                    'pasek' in formatted_product['Typ produktu'].lower()):
+                    if ('telefon' in formatted_product['Typ produktu'].lower() or
+                        'tablet' in formatted_product['Typ produktu'].lower() or
+                        'smartwatch' in formatted_product['Typ produktu'].lower()):
+                        if 'out' not in formatted_product['EAN'].lower():
+                            if 'bewood' not in formatted_product['Nazwa'].lower():
+                                attributes_str = ' '.join(str(value) for value in attributes.values()).lower()
+                                if 'folia' not in attributes_str and 'obiektyw' not in attributes_str:
+                                    formatted_products.append(formatted_product)
 
         formatted_product_df = pd.DataFrame(formatted_products)
         formatted_product_df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_active_products.xlsx'), index=False)
-        
+
+        print(f'{len(formatted_product_df)} products processed')
         return formatted_product_df
     
     def find_dimensions_description(self, product_description):
@@ -159,28 +335,35 @@ class ShoperAPIClient:
         description_clean = ' '.join(description_clean.split())
         description = description_clean
 
-        # Try to find comma-separated dimensions first
-        comma_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?[\s,]+(\d+[.,]\d+|\d+)\s*(?:cm|mm)?[\s,]+(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
-        comma_match = re.search(comma_pattern, description)
+        # Try to find three dimensions pattern first
+        three_dim_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+        three_dim_match = re.search(three_dim_pattern, description)
         
-        if comma_match:
-            # If we find comma-separated dimensions, format them
-            product_dimensions = f"{comma_match.group(1)} x {comma_match.group(2)} x {comma_match.group(3)}"
+        if three_dim_match:
+            # If we find three dimensions, use all of them
+            product_dimensions = f"{three_dim_match.group(1)} x {three_dim_match.group(2)} x {three_dim_match.group(3)}"
         else:
-            three_dim_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
-            three_dim_match = re.search(three_dim_pattern, description)
+            # Try to find dimensions labeled with Długość/Szerokość
+            dim_labeled_pattern = r'(?:Długość|Dlugosc)[^:]*:\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?.*?(?:Szerokość|Szerokosc)[^:]*:\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+            dim_labeled_match = re.search(dim_labeled_pattern, description, re.IGNORECASE)
             
-            if three_dim_match:
-                # If we find three dimensions, use all of them
-                product_dimensions = f"{three_dim_match.group(1)} x {three_dim_match.group(2)} x {three_dim_match.group(3)}"
+            if dim_labeled_match:
+                product_dimensions = f"{dim_labeled_match.group(1)} x {dim_labeled_match.group(2)}"
             else:
-                # Try to find two dimensions pattern
-                dimension_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
-                dimensions_match = re.search(dimension_pattern, description)
-                if dimensions_match:
-                    product_dimensions = f"{dimensions_match.group(1)} x {dimensions_match.group(2)}"
+                # Try to find X-Y labeled dimensions
+                xy_pattern = r'X-[^:]*:\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?.*?Y-[^:]*:\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+                xy_match = re.search(xy_pattern, description, re.IGNORECASE)
+                
+                if xy_match:
+                    product_dimensions = f"{xy_match.group(1)} x {xy_match.group(2)}"
                 else:
-                    product_dimensions = ''
+                    # Try to find two dimensions pattern
+                    dimension_pattern = r'(\d+[.,]\d+|\d+)\s*(?:cm|mm)?\s*(?:[xX×]|-)\s*(\d+[.,]\d+|\d+)\s*(?:cm|mm)?'
+                    dimensions_match = re.search(dimension_pattern, description)
+                    if dimensions_match:
+                        product_dimensions = f"{dimensions_match.group(1)} x {dimensions_match.group(2)}"
+                    else:
+                        product_dimensions = ''
 
         return [product_dimensions, description]
 

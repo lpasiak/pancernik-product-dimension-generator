@@ -1,9 +1,9 @@
 import gspread
 import pandas as pd
-from datetime import datetime
-from pathlib import Path
 import os
 from config import SHEETS_DIR
+import time
+from gspread.exceptions import APIError
 
 class GSheetsClient:
 
@@ -55,25 +55,33 @@ class GSheetsClient:
 
         return df
     
-    def save_data(self, df):
+    def save_data(self, df, max_retries=3, delay=5):
         """
         Save DataFrame to Google Sheets.
         """
-        try:
-            # Convert DataFrame to string values where necessary
-            all_values = self.transform_data(df)
-            
-            print('Cleaning the worksheet...')
-            # Clear existing content
-            self.worksheet.clear()
-            print('Updating the worksheet')
-            # Update with new values
-            self.worksheet.update(all_values)
-            print(f"Successfully updated worksheet: {self.sheet_name}")
-            
-        except Exception as e:
-            print(f"Error saving to Google Sheets: {str(e)}")
-            raise
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                print('Transforming data...')
+                all_values = self.transform_data(df)
+                print('Cleaning the worksheet...')
+                self.worksheet.clear()
+                print('Saving to Google Sheets...')
+                self.worksheet.update(all_values)
+                print("Successfully saved to Google Sheets!")
+                return True
+                
+            except APIError as e:
+                attempt += 1
+                if attempt == max_retries:
+                    print(f"Failed to save after {max_retries} attempts. Error: {str(e)}")
+                    return False
+                else:
+                    print(f"Attempt {attempt} failed. Retrying in {delay} seconds...")
+                    time.sleep(delay)
+            except Exception as e:
+                print(f"Unexpected error occurred: {str(e)}")
+                return False
 
     def transform_data(self, df):
         """

@@ -7,6 +7,8 @@ class Allegro:
         self.all_filepath = os.path.join('sheets', 'allegro_exports')
         self.final_df = self.load_and_get_all_dfs()
 
+        print(self.final_df)
+
     def load_and_get_all_dfs(self):
         self.dfs = []
 
