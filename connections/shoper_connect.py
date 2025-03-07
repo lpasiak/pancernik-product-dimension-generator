@@ -302,24 +302,29 @@ class ShoperAPIClient:
                 'Wymiary atrybut': self.find_dimensions_attribute(attributes),
                 'Wymiary opis': description_dimensions,
                 'Ilość': product['stock']['stock'],
-                'Komentarz': '',
                 'Data dodania produktu': pd.to_datetime(product['add_date'].split()[0]).strftime('%d-%m-%Y'),
-                'Opis bez HTML': description
+                'Opis bez HTML': description,
+                'Komentarz': '',
+                'Osoba': ''
             }
-            
-            # Product filters
-            if formatted_product['Ilość'] != '0':
-                if ('etui' in formatted_product['Typ produktu'].lower() or 
-                    'szkło' in formatted_product['Typ produktu'].lower() or 
-                    'pasek' in formatted_product['Typ produktu'].lower()):
-                    if ('telefon' in formatted_product['Typ produktu'].lower() or
-                        'tablet' in formatted_product['Typ produktu'].lower() or
-                        'smartwatch' in formatted_product['Typ produktu'].lower()):
-                        if 'out' not in formatted_product['EAN'].lower():
-                            if 'bewood' not in formatted_product['Nazwa'].lower():
-                                attributes_str = ' '.join(str(value) for value in attributes.values()).lower()
-                                if 'folia' not in attributes_str and 'obiektyw' not in attributes_str:
-                                    formatted_products.append(formatted_product)
+            if attributes and isinstance(attributes, dict) and len(attributes) > 0:
+                
+                attributes_str = ' '.join(str(value) for value in attributes.values()).lower()
+
+                # Product filters
+                if formatted_product['Wymiary atrybut'] == '' or formatted_product['Wymiary opis'] == '':
+                    if formatted_product['Ilość'] != '0':
+                        if ('etui' in formatted_product['Typ produktu'].lower() or 
+                            'szkło' in formatted_product['Typ produktu'].lower() or 
+                            'pasek' in formatted_product['Typ produktu'].lower()):
+                            if ('telefon' in formatted_product['Typ produktu'].lower() or
+                                'tablet' in formatted_product['Typ produktu'].lower() or
+                                'smartwatch' in formatted_product['Typ produktu'].lower()):
+                                if 'out' not in formatted_product['EAN'].lower():
+                                    if 'bewood' not in formatted_product['Nazwa'].lower():
+                                        if 'folia' not in attributes_str and 'obiektyw' not in attributes_str:
+                                            if 'obudowa 360' not in attributes_str:
+                                                formatted_products.append(formatted_product)
 
         formatted_product_df = pd.DataFrame(formatted_products)
         formatted_product_df.to_excel(os.path.join(config.SHEETS_DIR, 'shoper_all_active_products.xlsx'), index=False)
@@ -378,14 +383,14 @@ class ShoperAPIClient:
         # Check if the attribute group exists and is a dictionary
         if '552' in attributes and isinstance(attributes['552'], dict) and attributes['552'].get('1191'):
             product_length = attributes['552']['1191']
-        elif '555' in attributes and isinstance(attributes['555'], dict) and attributes['555'].get('1207'):
-            product_length = attributes['555']['1207']
-        elif '560' in attributes and isinstance(attributes['560'], dict) and attributes['560'].get('1249'):
-            product_length = attributes['560']['1249']
         elif '553' in attributes and isinstance(attributes['553'], dict) and attributes['553'].get('1192'):
             product_length = attributes['553']['1192']
+        elif '555' in attributes and isinstance(attributes['555'], dict) and attributes['555'].get('1207'):
+            product_length = attributes['555']['1207']
         elif '556' in attributes and isinstance(attributes['556'], dict) and attributes['556'].get('1217'):
             product_length = attributes['556']['1217']
+        elif '560' in attributes and isinstance(attributes['560'], dict) and attributes['560'].get('1249'):
+            product_length = attributes['560']['1249']
         elif '562' in attributes and isinstance(attributes['562'], dict) and attributes['562'].get('1268'):
             product_length = attributes['562']['1268']
 
